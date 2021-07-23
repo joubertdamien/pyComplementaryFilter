@@ -3,8 +3,6 @@ import complementaryfilter as cf
 import numpy as np
 import sys
 import time
-from tqdm import tqdm
-import cv2
 import matplotlib.pyplot as plt
 
 def reorder_aedat4(filename):

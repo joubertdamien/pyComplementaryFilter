@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import aedat
 import complementaryfilter as cf
 import numpy as np
@@ -7,14 +8,27 @@ import matplotlib.pyplot as plt
 
 def reorder_aedat4(filename):
     decoder = aedat.Decoder(filename)
+    stacked_ev = np.array(0, dtype=[('t', '<u8'), ('x', '<u2'), ('y', '<u2'), ('on', '?')])
     packets = []
-    for packet in tqdm(decoder):
-        if 'frame' in packet:
-            packets.append({'t' : packet['frame']['exposure_end_t'], 'p' : packet})
-        if 'events' in packet:
-            packets.append({'t' : packet['events']['t'][0], 'p' : packet})
+    for p in tqdm(decoder):
+        if 'frame' in p:
+            packets.append({'t' : (p['frame']['exposure_end_t']+p['frame']['exposure_begin_t'])//2, 'p' : p})
+        if 'events' in p:
+            packets.append({'t' : p['events']['t'][0], 'p' : p})
     packets.sort(key=lambda i: i['t'])
-    return packets
+    packets_f = []
+    for p in packets:
+        if 'frame' in p['p']:
+            inds = np.where(stacked_ev['t'] <= p['t'])
+            if len(inds[0]) > 0:
+                packets_f.append({'t' : stacked_ev['t'][inds][0], 'p' : {'events':stacked_ev[inds]}})
+            packets_f.append(p)
+            stacked_ev = np.delete(stacked_ev, inds)
+        if 'events' in p['p']:
+            stacked_ev = np.concatenate([stacked_ev, p['p']['events']]) if len(stacked_ev.shape) > 0 else p['p']['events']
+    if len(stacked_ev.shape) > 0:
+        packets_f.append({'t' : stacked_ev['t'][0], 'p' : {'events':stacked_ev}})
+    return packets_f
 
 x_def = 240
 y_def = 180
@@ -24,16 +38,16 @@ x = np.reshape(x, x_def * y_def)
 y = np.arange(0, y_def, 1)
 y = np.tile(y.reshape([y_def, 1]), [1, x_def])
 y = np.reshape(y, y_def * x_def)
-
+img_d = np.zeros((y_def, x_def))
 file = "data/night_run.aedat4"
-th_pos = 0.4
-th_neg = 0.4
-alpha = 0.00001*np.pi
+th_pos = 0.3
+th_neg = 0.3
+alpha = 2e-6*np.pi
 lam = 0.1
 L1 = 10 
 L2 = 250
 Lmax = 255
-display = False
+display = True
 cf.init(x_def, y_def, th_pos, th_neg, alpha, lam, L1, L2, Lmax)
 img_it_ev = np.zeros(x_def * y_def, dtype=[('t', '<u8'), ('x', '<u2'), ('y', '<u2'), ('it', 'f4')])
 ex = np.zeros(1, dtype=[('t', '<u8'), ('x', '<u2'), ('y', '<u2'), ('it', 'f4')])
@@ -47,9 +61,7 @@ start = time.time()
 for packet in packets:
     if 'frame' in packet['p']:
         img_d = np.array(packet['p']['frame']['pixels'])
-        img = packet['p']['frame']['pixels'].reshape(x_def * y_def)
-        ind = np.where(img > 0)
-        img[ind] = np.log(img[ind])
+        img = packet['p']['frame']['pixels'].reshape(x_def * y_def).astype(np.float32)
         img_it_ev['it'] = img
         img_it_ev['t'] = np.full(x_def * y_def, packet['p']['frame']['exposure_end_t'])
         nb_ev += img_it_ev.shape[0]
@@ -58,14 +70,16 @@ for packet in packets:
         if display:
             plt.figure(1)
             plt.clf()
-            plt.subplot(1, 3, 1)
+            plt.subplot(1, 3, 1), plt.axis('off')
             plt.imshow(img_res / np.max(img_res)), plt.title("CF")
-            plt.subplot(1, 3, 2)
-            plt.imshow(np.exp(-(packet['p']['frame']['t'] - img_ev).astype(np.float32) / 100000)), plt.title("Events")
-            plt.subplot(1, 3, 3)
-            plt.imshow(img_d), plt.title("Frames")
+            plt.subplot(1, 3, 2), plt.axis('off')
+            plt.imshow(np.exp(-(packet['t'] - img_ev).astype(np.float32) / 10000)), plt.title("Events")
+            plt.subplot(1, 3, 3), plt.axis('off')
+            ind = np.where(img_d > 0)
+            img_d[ind] = np.log(img_d[ind])
+            plt.imshow(img_d / np.max(img_d)), plt.title("Frames")
             plt.draw()
-            plt.pause(0.01)
+            plt.pause(0.1)
     if 'events' in packet['p']:
         nb_ev += packet['p']['events'].shape[0]
         res = cf.filterEv(packet['p']['events'], ex)
@@ -73,4 +87,3 @@ for packet in packets:
         img_ev[res['ev']['y'], res['ev']['x']] = res['ev']['t']
 dur = time.time() - start
 print('Processing rate: {} = {} / {} ev/s'.format(nb_ev / dur, nb_ev, dur))
-       

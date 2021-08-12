@@ -48,8 +48,8 @@ class CFilter{
         float_t th_neg_;
         float_t alp_;
         float_t lam_;
-        uint16_t L1_;
-        uint16_t L2_;
+        float_t L1_;
+        float_t L2_;
         uint16_t maxL_;
         logLUT lut_;
     public:
@@ -62,10 +62,10 @@ class CFilter{
             th_pos_ = th_pos;th_neg_ = -th_neg;
             alp_ = alp;
             lam_ = lam;
-            L1_ = L1;
-            L2_ = L2;
             maxL_ = maxL;
             lut_ = logLUT(maxL);
+            L1_ = lut_.getVal(L1);
+            L2_ = lut_.getVal(L2);
         };
         uint32_t getPos(const uint16_t& x, const uint16_t& y){return y * x_ + x;}
         void processEvent(std::vector<Event>& in, std::vector<IntensityEvent>& out){
@@ -92,10 +92,10 @@ class CFilter{
                 tsurface_.at(p) = it->t;
                 last_log_image_.at(p) = (it->intensity > 0) ? lut_.getVal(it->intensity) : 0;
                 if(it->intensity < L1_)
-                    alp_ar_.at(p) = alp_ * ( lam_ + (1-lam_) * it->intensity / L1_);
+                    alp_ar_.at(p) = alp_ * ( lam_ + (1-lam_) * last_log_image_.at(p) / L1_);
                 else{
                     if(it->intensity > L2_)
-                        alp_ar_.at(p) = alp_ * ( lam_ + (1-lam_) * (it->intensity- maxL_) / (L2_ - maxL_));
+                        alp_ar_.at(p) = alp_ * ( lam_ + (1-lam_) * (last_log_image_.at(p) - maxL_) / (L2_ - maxL_));
                     else
                         alp_ar_.at(p) = alp_;
                 }

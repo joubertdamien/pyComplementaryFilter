@@ -33,7 +33,7 @@ class logLUT{
             }
         }
         float_t getVal(uint16_t t){
-            return (t == 0 || t >= maxVal_) ? 0 : lut_.at(t);
+            return (t == 0 || t > maxVal_) ? 0 : lut_.at(t);
         }
 };
 class CFilter{
@@ -50,7 +50,7 @@ class CFilter{
         float_t lam_;
         float_t L1_;
         float_t L2_;
-        uint16_t maxL_;
+        float_t maxL_;
         logLUT lut_;
     public:
         CFilter(uint16_t& x, uint16_t& y, float_t& th_pos, float_t& th_neg, float_t& alp, float_t& lam, uint16_t& L1, uint16_t& L2, uint16_t& maxL){
@@ -62,10 +62,10 @@ class CFilter{
             th_pos_ = th_pos;th_neg_ = -th_neg;
             alp_ = alp;
             lam_ = lam;
-            maxL_ = maxL;
             lut_ = logLUT(maxL);
             L1_ = lut_.getVal(L1);
             L2_ = lut_.getVal(L2);
+            maxL_ = lut_.getVal(maxL);
         };
         uint32_t getPos(const uint16_t& x, const uint16_t& y){return y * x_ + x;}
         void processEvent(std::vector<Event>& in, std::vector<IntensityEvent>& out){
@@ -74,7 +74,7 @@ class CFilter{
             float_t dec;
             for(auto it = in.begin(); it < in.end(); it++){
                 p = getPos(it->x, it->y);
-                dec = std::exp(-static_cast<float_t>(it->t - tsurface_.at(p)) * alp_ar_.at(p));
+                dec = (tsurface_.at(p) > 0) ? std::exp(-static_cast<float_t>(it->t - tsurface_.at(p)) * alp_ar_.at(p)) : 0;
                 cur_log_image_.at(p) = dec * cur_log_image_.at(p) + (1-dec) * last_log_image_.at(p);
                 cur_log_image_.at(p) += (it->is_increase) ? th_pos_ : th_neg_;
                 out.push_back(IntensityEvent{it->t, it->x, it->y, cur_log_image_.at(p)});
@@ -86,15 +86,15 @@ class CFilter{
             float_t dec;
             for(auto it = in.begin(); it < in.end(); it++){
                 p = getPos(it->x, it->y);
-                dec = std::exp(-static_cast<float_t>(it->t - tsurface_.at(p)) * alp_ar_.at(p));
+                dec = (tsurface_.at(p) > 0) ? std::exp(-static_cast<float_t>(it->t - tsurface_.at(p)) * alp_ar_.at(p)) : 0;
+                last_log_image_.at(p) = (it->intensity > 0) ? lut_.getVal(it->intensity) : 0;
                 cur_log_image_.at(p) = dec * cur_log_image_.at(p) + (1-dec) * last_log_image_.at(p);
                 out.push_back(IntensityEvent{it->t, it->x, it->y, cur_log_image_.at(p)});
                 tsurface_.at(p) = it->t;
-                last_log_image_.at(p) = (it->intensity > 0) ? lut_.getVal(it->intensity) : 0;
-                if(it->intensity < L1_)
+                if(last_log_image_.at(p) < L1_)
                     alp_ar_.at(p) = alp_ * ( lam_ + (1-lam_) * last_log_image_.at(p) / L1_);
                 else{
-                    if(it->intensity > L2_)
+                    if(last_log_image_.at(p) > L2_)
                         alp_ar_.at(p) = alp_ * ( lam_ + (1-lam_) * (last_log_image_.at(p) - maxL_) / (L2_ - maxL_));
                     else
                         alp_ar_.at(p) = alp_;

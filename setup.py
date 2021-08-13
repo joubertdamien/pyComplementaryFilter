@@ -9,7 +9,7 @@ c_ext = Extension("complementaryfilter",
 c_ext.language = 'c++'
 setup(
     name='complementaryfilter',
-    version='1.0',
+    version='1.1',
     description='Complementary filter described in https://www.cedricscheerlinck.com/continuous-time-intensity-estimation',
     ext_modules=[c_ext],
 )

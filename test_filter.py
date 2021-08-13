@@ -53,7 +53,7 @@ img_it_ev = np.zeros(x_def * y_def, dtype=[('t', '<u8'), ('x', '<u2'), ('y', '<u
 ex = np.zeros(1, dtype=[('t', '<u8'), ('x', '<u2'), ('y', '<u2'), ('it', 'f4')])
 img_it_ev['x'] = x
 img_it_ev['y'] = y
-img_res = np.zeros((y_def, x_def), dtype=np.float)
+img_res = np.zeros((y_def, x_def), dtype=np.float32)
 img_ev = np.zeros((y_def, x_def), dtype=np.uint64)
 packets = reorder_aedat4(file)
 nb_ev = 0
